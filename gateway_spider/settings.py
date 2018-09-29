@@ -22,7 +22,7 @@ NEWSPIDER_MODULE = 'gateway_spider.spiders'
 ROBOTSTXT_OBEY = False
 
 # Configure maximum concurrent requests performed by Scrapy (default: 16)
-CONCURRENT_REQUESTS = 32
+CONCURRENT_REQUESTS = 64
 
 # Configure a delay for requests for the same website (default: 0)
 # See https://doc.scrapy.org/en/latest/topics/settings.html#download-delay
@@ -92,16 +92,16 @@ COOKIES_ENABLED = False
 
 LOG_LEVEL = 'INFO'
 
-DOWNLOAD_TIMEOUT = 2
+DOWNLOAD_TIMEOUT = 3
 
 REDIRECT_ENABLED = False
 
 RETRY_ENABLED = False
 
-# REACTOR_THREADPOOL_MAXSIZE = 20
+REACTOR_THREADPOOL_MAXSIZE = 20
 
-# DNSCACHE_ENABLED = True
+DNSCACHE_ENABLED = True
 
-# DNSCACHE_SIZE = 10000
+DNSCACHE_SIZE = 10000
 
-#DNS_TIMEOUT = 0.1
+DNS_TIMEOUT = 1

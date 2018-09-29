@@ -1,0 +1,1 @@
+nohup python -u run.py > serve.out 2>&1 &
