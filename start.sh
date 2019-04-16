@@ -1,1 +1,1 @@
-nohup python -u run.py > serve.out 2>&1 &
+nohup python -u run.py > serve_`date +%Y%m%d%H%M%S`.out 2>&1 &
