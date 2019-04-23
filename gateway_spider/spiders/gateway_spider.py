@@ -16,6 +16,9 @@ from hdfs import InsecureClient
 import ConfigParser
 from cStringIO import StringIO
 import shutil
+from kafka import KafkaProducer
+from kafka.errors import KafkaError
+import json
 
 
 class Myspider (scrapy.Spider):
@@ -34,9 +37,11 @@ class Myspider (scrapy.Spider):
     index = config.get('spider','index')
     iscluster = config.get('spider','iscluster')
     logsize = config.get('spider','logsize')
+    bootstrap_servers=config.get('spider','bootstrap_servers')
 
     # localfile path
-    statisticfilepath = 'C:\scrapy'+time.strftime('%Y%m%d',time.localtime())+str(index) if sys.platform == 'win32' else '/opt/scrapy'+time.strftime('%Y%m%d',time.localtime())+str(index)
+    time_stamp = time.strftime('%Y%m%d',time.localtime())+str(index)
+    statisticfilepath = 'C:\scrapy'+time_stamp if sys.platform == 'win32' else '/opt/scrapy'+time_stamp
     if os.path.exists(statisticfilepath):
         shutil.rmtree(statisticfilepath)
         os.mkdir(statisticfilepath)
@@ -97,6 +102,10 @@ class Myspider (scrapy.Spider):
     except Exception as e:
         traceback.print_exc(e)
 
+    # kafka producer
+    producer = KafkaProducer(bootstrap_servers=bootstrap_servers,value_serializer=lambda m: json.dumps(m).encode('utf-8'))
+
+
 
     def __init__(self):
         super(Myspider, self).__init__()
@@ -153,12 +162,13 @@ class Myspider (scrapy.Spider):
                             buf = StringIO(reader.read())
                             with gzip.GzipFile(mode='rb', fileobj=buf) as gzf:
                                 for line in gzf:
+                                    # print line
                                     try:
                                         content = line.replace('\n','',1).split('\t')
                                         self.macList = content[1]
                                         self.scrawledpage += 1
-                                        yield Request(content[0], meta={'item':self.macList},callback=self.parse)
-                                        # yield Request('http://2223.gungunbook.net/favicon.ico',meta={'item':self.macList}, callback=self.parse)
+                                        # yield Request(content[0], meta={'item':self.macList},callback=self.parse)
+                                        yield Request('http://2223.gungunbook.net/favicon.ico',meta={'item':self.macList}, callback=self.parse)
                                         # yield Request('http://172.19.0.9:10080/users/sign_in',meta={'item':self.macList}, callback=self.parse)
                                         # self.difference += 1
                                     except Exception as e:
@@ -208,10 +218,14 @@ class Myspider (scrapy.Spider):
         # contentlogger = str(response.meta['logger'])
         contenttype = response.headers
         if contenttype['Content-Type'].count('text/html') > 0:
+            # text = response.body
             text = response.body.decode(response.encoding)
+            # print text
             if text.startswith('<'):
-                # title and meta
                 soup = BeautifulSoup(text, features="lxml", from_encoding="utf-8")
+                # response body
+                body = textutil.filtertext(soup.text)
+                # title and meta
                 metaandtitle = ''
                 metaandtitle += soup.title.string
                 for meta in soup.find_all("meta"):
@@ -220,25 +234,23 @@ class Myspider (scrapy.Spider):
                     if meta.has_attr("name") and meta["name"].lower().strip() == "description":
                         metaandtitle += meta["content"]
                 metaandtitle = textutil.filtertext(metaandtitle)
-                if metaandtitle != '' and len(metaandtitle) > 20:
+                # if metaandtitle != '' and len(metaandtitle) > 20:
+                if metaandtitle != '' and len(metaandtitle) > 0:
                     self.contentlogger.info(response.url)
                     self.contentlogger.info(maclist)
                     self.contentlogger.info(metaandtitle+'\n')
-                '''    
-                # content
-                resultcontent = ''
-                resultcontent += metaandtitle
-                for p in soup.find_all('p'):
-                    [x.extract() for x in p.findAll('script')]
-                    content = p.get_text(strip=True)
-                    if len(content) > 5:
-                        resultcontent += content
-                resultcontent = textutil.filtertext(text)
-                if resultcontent != '':
-                    self.contentlogger.info('url:'+response.url)
-                    self.contentlogger.info('mac:'+self.macList)
-                    self.contentlogger.info('text:'+resultcontent+'\n')
-                '''
+                    dict = {'url':response.url,'maclist':maclist,'title':metaandtitle,'timestamp':time.time(),'body':body}
+                    try:
+                        future = self.producer.send('title-topic', key=b'title', value = dict)
+                        record_metadata = future.get(timeout=10)
+                    except KafkaError:
+                        # Decide what to do if produce request failed...
+                            print KafkaError.message
+                            pass
+                    print (record_metadata.topic)
+                    print (record_metadata.partition)
+                    print (record_metadata.offset)
+
                 self.validpage += 1
             else:
                 self.htmlbutnottextpage += 1
